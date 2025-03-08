@@ -42,19 +42,16 @@ class FuturesPosition:
         - Short position: PnL = position_value * (1 - current_price/entry_price)
         """
         position_value = self.size * self.entry_price  # Value in USD
-
-        # Calculate PnL based on position type
-        multiplier = (current_price/self.entry_price - 1) if self.is_long else (1 - current_price/self.entry_price)
+        price_ratio = current_price / self.entry_price
+        multiplier = (price_ratio - 1) if self.is_long else (1 - price_ratio)
         self.pnl = position_value * multiplier * self.leverage
-
         return self.pnl
 
     def close_position(self, exit_price: float, timestamp: datetime) -> float:
         """Close the position and realize PnL"""
         self.exit_price = exit_price
         self.exit_timestamp = timestamp
-        self.calculate_pnl(exit_price)
-        return self.pnl
+        return self.calculate_pnl(exit_price)
 
     def is_liquidated_at_price(self, price: float) -> bool:
         """Check if position would be liquidated at given price"""
@@ -64,6 +61,4 @@ class FuturesPosition:
     def __str__(self) -> str:
         position_type = "LONG" if self.is_long else "SHORT"
         status = "LIQUIDATED" if self.is_liquidated else "CLOSED" if self.exit_price else "OPEN"
-
-        return (f"{position_type} {self.size:.6f} BTC @ {self.entry_price:.2f} USD "
-                f"(Leverage: {self.leverage}x, {status})")
+        return f"{position_type} {self.size:.6f} BTC @ {self.entry_price:.2f} USD (Leverage: {self.leverage}x, {status})"

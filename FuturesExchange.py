@@ -44,32 +44,37 @@ class FuturesExchange:
 
     def _record_order(self, account_id: str, order_type: str, **kwargs) -> None:
         """Record an executed order with common fields"""
-        order = {
+        self.executed_orders.append({
             'account_id': account_id,
             'type': 'MARKET',
             'action': order_type,
             'timestamp': self.current_timestamp,
             **kwargs
-        }
-        self.executed_orders.append(order)
+        })
 
-    def place_market_order(self,
-                          account_id: str,
-                          size: float,
-                          leverage: float,
-                          is_long: bool) -> Optional[FuturesPosition]:
-        """Place a market order to open a position"""
+    def _validate_account(self, account_id: str) -> Optional[FuturesAccount]:
+        """Validate account exists and return it"""
         if account_id not in self.accounts:
             print(f"Account {account_id} not found")
             return None
+        return self.accounts[account_id]
 
-        account = self.accounts[account_id]
+    def open_position(self, account_id: str, is_long: bool, size: float, leverage: float) -> Optional[FuturesPosition]:
+        """Open a new position at current market price"""
+        account = self._validate_account(account_id)
+        if not account:
+            return None
+
+        # Calculate liquidation price
+        entry_price = self.current_price
+        liquidation_price = entry_price * (1 - (1 / leverage) if is_long else 1 + (1 / leverage))
+
         position = account.open_position(
-            price=self.current_price,
+            price=entry_price,
             size=size,
             leverage=leverage,
             is_long=is_long,
-            liquidation_price=self.current_price,
+            liquidation_price=liquidation_price,
             timestamp=self.current_timestamp
         )
 
@@ -78,20 +83,23 @@ class FuturesExchange:
                 account_id=account_id,
                 order_type='OPEN',
                 position_type='LONG' if is_long else 'SHORT',
-                price=self.current_price,
+                price=entry_price,
                 size=size,
                 leverage=leverage
             )
 
         return position
 
+    def place_market_order(self, account_id: str, size: float, leverage: float, is_long: bool) -> Optional[FuturesPosition]:
+        """Place a market order to open a position"""
+        return self.open_position(account_id, is_long, size, leverage)
+
     def close_position(self, account_id: str, position: FuturesPosition) -> float:
         """Close an open position at current market price"""
-        if account_id not in self.accounts:
-            print(f"Account {account_id} not found")
+        account = self._validate_account(account_id)
+        if not account:
             return 0.0
 
-        account = self.accounts[account_id]
         pnl = account.close_position(
             position=position,
             price=self.current_price,
@@ -132,10 +140,8 @@ class FuturesExchange:
         end_index = len(self.price_data) - 1
 
         if days:
-            # Calculate the index that corresponds to 'days' days from current
             target_date = self.current_timestamp + timedelta(days=days)
             future_indices = self.price_data.index.searchsorted(target_date)
-            # Handle both scalar and array return types
             if isinstance(future_indices, (list, np.ndarray)):
                 future_indices = future_indices[0]
             end_index = min(future_indices, end_index)
@@ -151,37 +157,3 @@ class FuturesExchange:
         """Get price history for the last N days from current time"""
         start_idx = max(0, self.current_index - lookback_days)
         return self.price_data.iloc[start_idx:self.current_index + 1]
-
-    def open_position(self, account_id: str, is_long: bool, size: float, leverage: float) -> Optional[FuturesPosition]:
-        """Open a new position at current market price"""
-        if account_id not in self.accounts:
-            print(f"Account {account_id} not found")
-            return None
-
-        account = self.accounts[account_id]
-
-        # Calculate liquidation price
-        entry_price = self.current_price
-        liquidation_price = entry_price * (1 - (1 / leverage) if is_long else 1 + (1 / leverage))
-
-        # Create and add the position
-        position = account.open_position(
-            price=entry_price,
-            size=size,
-            leverage=leverage,
-            is_long=is_long,
-            liquidation_price=liquidation_price,
-            timestamp=self.current_timestamp
-        )
-
-        if position:
-            self._record_order(
-                account_id=account_id,
-                order_type='OPEN',
-                position_type='LONG' if is_long else 'SHORT',
-                price=entry_price,
-                size=size,
-                leverage=leverage
-            )
-
-        return position

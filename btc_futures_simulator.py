@@ -1,15 +1,13 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 from FuturesExchange import FuturesExchange
 from TradingBot import TradingBot
 
-def run_simulation():
+def run_simulation() -> Tuple[TradingBot, FuturesExchange]:
     """Run a complete simulation with the exchange and trading bot"""
     # Load Bitcoin price data
     try:
-        # Use relative imports instead of package imports
         from btc_analysis import load_data
-        
         btc_data = load_data()
     except FileNotFoundError:
         print("Price data file not found. Downloading data...")
@@ -17,28 +15,24 @@ def run_simulation():
         btc_data = download_btc_data(start_date='2020-01-01')
         save_data(btc_data)
     
-    # Initialize the exchange with the price data
+    # Initialize exchange and register account
     exchange = FuturesExchange(btc_data)
-    
-    # Register a trading account
     account_id = "bot_account"
     exchange.register_account(account_id, initial_balance=10000.0)
     
-    # Create a trading bot
-    bot_params = {
-        'short_window': 10,
-        'long_window': 30,
-        'position_size': 0.1,
-        'leverage': 5,
-        'take_profit_pct': 0.15,
-        'stop_loss_pct': 0.07
-    }
-    
+    # Create trading bot with strategy parameters
     bot = TradingBot(
         exchange=exchange,
         account_id=account_id,
         strategy='moving_average_crossover',
-        params=bot_params
+        params={
+            'short_window': 10,
+            'long_window': 30,
+            'position_size': 0.1,
+            'leverage': 5,
+            'take_profit_pct': 0.15,
+            'stop_loss_pct': 0.07
+        }
     )
     
     # Run the simulation
