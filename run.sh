@@ -13,11 +13,7 @@ if [ ! -d "btc_venv" ]; then
 fi
 
 # Activate virtual environment
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    source btc_venv/Scripts/activate
-else
-    source btc_venv/bin/activate
-fi
+source btc_venv/bin/activate
 
 # Create necessary directories (in case they don't exist)
 mkdir -p data
@@ -35,30 +31,11 @@ python btc_analysis.py
 # Display the generated plots
 echo "Analysis complete! Opening plots..."
 
-# Try to open the plots with the appropriate command based on OS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    open figures/btc_price_history.png
-    open figures/historic_price.png
-    open figures/returns_distribution.png
-    open figures/volatility.png
-    open figures/decomposition.png
-elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    # Windows
-    start figures/btc_price_history.png
-    start figures/historic_price.png
-    start figures/returns_distribution.png
-    start figures/volatility.png
-    start figures/decomposition.png
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    xdg-open figures/btc_price_history.png
-    xdg-open figures/historic_price.png
-    xdg-open figures/returns_distribution.png
-    xdg-open figures/volatility.png
-    xdg-open figures/decomposition.png
-else
-    echo "Plots saved in the 'figures' directory."
-fi
+# Open plots on macOS
+open figures/btc_price_history.png
+open figures/historic_price.png
+open figures/returns_distribution.png
+open figures/volatility.png
+open figures/decomposition.png
 
 echo "=== Analysis complete! ===" 

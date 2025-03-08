@@ -16,12 +16,8 @@ fi
 echo "Creating virtual environment..."
 python3 -m venv btc_venv
 
-# Activate virtual environment (different for Windows vs Unix-based systems)
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    source btc_venv/Scripts/activate
-else
-    source btc_venv/bin/activate
-fi
+# Activate virtual environment for macOS
+source btc_venv/bin/activate
 
 # Upgrade pip
 echo "Upgrading pip..."
@@ -49,7 +45,6 @@ mkdir -p models
 
 echo "=== Setup complete! ==="
 echo "To activate this environment in the future, run:"
-echo "source btc_venv/bin/activate  # On Unix/macOS"
-echo "source btc_venv/Scripts/activate  # On Windows"
+echo "source btc_venv/bin/activate"
 echo ""
 echo "To run the analysis, use: ./run.sh" 
