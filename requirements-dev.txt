@@ -1,0 +1,9 @@
+# Type stubs for development
+pandas-stubs
+# numpy has built-in type annotations, so no stubs needed
+mypy_extensions
+mypy
+# For better type checking
+typing_extensions
+# Note: matplotlib, seaborn, and statsmodels don't have official type stubs packages
+# We can use mypy_extensions to help with type checking 
