@@ -5,6 +5,7 @@ import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import os
+import matplotlib.dates as mdates
 
 def load_data(filepath='data/btc_price_data.csv'):
     """Load Bitcoin data from CSV file"""
@@ -90,18 +91,27 @@ def decompose_time_series(data, save_path='figures/decomposition.png'):
     # Fill missing values using forward fill and then backward fill to ensure no NaNs
     close_prices = close_prices.ffill().bfill()
     
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
     # Check if there are still any NaN values
     if close_prices.isna().any():
         print("Warning: Data still contains NaN values after filling. Creating simple trend plot instead.")
-        plt.figure(figsize=(12, 6))
-        plt.plot(close_prices.dropna())
-        plt.title('Bitcoin Price Trend (Seasonal Decomposition Failed)')
-        plt.xlabel('Date')
-        plt.ylabel('Price (USD)')
-        plt.grid(True)
-        plt.savefig(save_path)
+        plt.figure(figsize=(12, 6), facecolor='#1e1e1e')
+        plt.plot(close_prices.dropna(), color='#00a8ff')
+        plt.title('Bitcoin Price Trend (Seasonal Decomposition Failed)', color='#e0e0e0')
+        plt.xlabel('Date', color='#e0e0e0')
+        plt.ylabel('Price (USD)', color='#e0e0e0')
+        plt.grid(True, alpha=0.2, color='#555555')
+        
+        # Set 20 x-ticks
+        set_date_ticks(plt.gca(), 20)
+        
+        plt.savefig(save_path, facecolor='#1e1e1e')
         plt.close()
         print(f"Simple trend plot saved to {save_path}")
+        # Reset to default style
+        plt.style.use('default')
         return
     
     # Ensure we have enough data points and adjust period if necessary
@@ -111,6 +121,8 @@ def decompose_time_series(data, save_path='figures/decomposition.png'):
         period = min(365, data_length // 4)
         if period < 7:
             print("Warning: Not enough data for meaningful seasonal decomposition.")
+            # Reset to default style
+            plt.style.use('default')
             return
         print(f"Using period={period} for seasonal decomposition.")
     else:
@@ -130,22 +142,65 @@ def decompose_time_series(data, save_path='figures/decomposition.png'):
             decomposition = seasonal_decompose(close_prices, model='additive', period=period)
         
         # Plot decomposition without the seasonal component
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12))
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 16), facecolor='#1e1e1e')
+        fig.patch.set_facecolor('#1e1e1e')
         
-        decomposition.observed.plot(ax=ax1)
-        ax1.set_title('Observed')
-        ax1.grid(True)
+        # Define colors for better visibility on dark background
+        line_color = '#00a8ff'  # Bright blue
+        title_color = '#e0e0e0'  # Light gray
+        grid_color = '#555555'   # Medium gray
         
-        decomposition.trend.plot(ax=ax2)
-        ax2.set_title('Trend')
-        ax2.grid(True)
+        # Original price plot
+        decomposition.observed.plot(ax=ax1, color=line_color)
+        ax1.set_title('Observed', color=title_color)
+        ax1.set_facecolor('#2d2d2d')
+        ax1.grid(True, alpha=0.2, color=grid_color)
+        ax1.tick_params(colors=title_color)
+        ax1.spines['bottom'].set_color(grid_color)
+        ax1.spines['top'].set_color(grid_color)
+        ax1.spines['left'].set_color(grid_color)
+        ax1.spines['right'].set_color(grid_color)
+        set_date_ticks(ax1, 20, tick_color=title_color)
         
-        decomposition.resid.plot(ax=ax3)
-        ax3.set_title('Residual')
-        ax3.grid(True)
+        # Log scale plot
+        decomposition.observed.plot(ax=ax2, color=line_color)
+        ax2.set_yscale('log')
+        ax2.set_title('Observed (Log Scale)', color=title_color)
+        ax2.set_facecolor('#2d2d2d')
+        ax2.grid(True, alpha=0.2, color=grid_color)
+        ax2.tick_params(colors=title_color)
+        ax2.spines['bottom'].set_color(grid_color)
+        ax2.spines['top'].set_color(grid_color)
+        ax2.spines['left'].set_color(grid_color)
+        ax2.spines['right'].set_color(grid_color)
+        set_date_ticks(ax2, 20, tick_color=title_color)
+        
+        # Trend plot
+        decomposition.trend.plot(ax=ax3, color=line_color)
+        ax3.set_title('Trend', color=title_color)
+        ax3.set_facecolor('#2d2d2d')
+        ax3.grid(True, alpha=0.2, color=grid_color)
+        ax3.tick_params(colors=title_color)
+        ax3.spines['bottom'].set_color(grid_color)
+        ax3.spines['top'].set_color(grid_color)
+        ax3.spines['left'].set_color(grid_color)
+        ax3.spines['right'].set_color(grid_color)
+        set_date_ticks(ax3, 20, tick_color=title_color)
+        
+        # Residual plot
+        decomposition.resid.plot(ax=ax4, color=line_color)
+        ax4.set_title('Residual', color=title_color)
+        ax4.set_facecolor('#2d2d2d')
+        ax4.grid(True, alpha=0.2, color=grid_color)
+        ax4.tick_params(colors=title_color)
+        ax4.spines['bottom'].set_color(grid_color)
+        ax4.spines['top'].set_color(grid_color)
+        ax4.spines['left'].set_color(grid_color)
+        ax4.spines['right'].set_color(grid_color)
+        set_date_ticks(ax4, 20, tick_color=title_color)
         
         plt.tight_layout()
-        plt.savefig(save_path)
+        plt.savefig(save_path, facecolor='#1e1e1e')
         plt.close()
         print(f"Time series decomposition saved to {save_path}")
         
@@ -154,26 +209,83 @@ def decompose_time_series(data, save_path='figures/decomposition.png'):
         print("Creating alternative visualization...")
         
         # Create an alternative visualization with rolling statistics
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), facecolor='#1e1e1e')
+        fig.patch.set_facecolor('#1e1e1e')
         
-        # Plot original data with trend (rolling mean)
-        close_prices.plot(ax=ax1, label='Original')
-        close_prices.rolling(window=period//3).mean().plot(ax=ax1, label=f'Trend ({period//3}-day MA)', 
-                                                         color='red')
-        ax1.set_title('Bitcoin Price with Trend')
-        ax1.legend()
-        ax1.grid(True)
+        # Define colors
+        line_color = '#00a8ff'  # Bright blue
+        line_color2 = '#00ff7f'  # Green
+        title_color = '#e0e0e0'  # Light gray
+        grid_color = '#555555'   # Medium gray
         
-        # Plot rolling standard deviation as a proxy for volatility/seasonality
-        close_prices.rolling(window=20).std().plot(ax=ax2, label='20-day Rolling Std Dev', color='green')
-        ax2.set_title('Rolling Volatility (Proxy for Seasonality)')
-        ax2.legend()
-        ax2.grid(True)
+        # Plot original data
+        close_prices.plot(ax=ax1, label='Original', color=line_color)
+        ax1.set_title('Bitcoin Price', color=title_color)
+        ax1.set_facecolor('#2d2d2d')
+        ax1.legend(facecolor='#2d2d2d', edgecolor=grid_color, labelcolor=title_color)
+        ax1.grid(True, alpha=0.2, color=grid_color)
+        ax1.tick_params(colors=title_color)
+        ax1.spines['bottom'].set_color(grid_color)
+        ax1.spines['top'].set_color(grid_color)
+        ax1.spines['left'].set_color(grid_color)
+        ax1.spines['right'].set_color(grid_color)
+        set_date_ticks(ax1, 20, tick_color=title_color)
+        
+        # Plot log scale
+        close_prices.plot(ax=ax2, label='Original (Log Scale)', color=line_color)
+        ax2.set_yscale('log')
+        ax2.set_title('Bitcoin Price (Log Scale)', color=title_color)
+        ax2.set_facecolor('#2d2d2d')
+        ax2.legend(facecolor='#2d2d2d', edgecolor=grid_color, labelcolor=title_color)
+        ax2.grid(True, alpha=0.2, color=grid_color)
+        ax2.tick_params(colors=title_color)
+        ax2.spines['bottom'].set_color(grid_color)
+        ax2.spines['top'].set_color(grid_color)
+        ax2.spines['left'].set_color(grid_color)
+        ax2.spines['right'].set_color(grid_color)
+        set_date_ticks(ax2, 20, tick_color=title_color)
+        
+        # Plot rolling standard deviation as a proxy for volatility
+        close_prices.rolling(window=20).std().plot(ax=ax3, label='20-day Rolling Std Dev', color=line_color2)
+        ax3.set_title('Rolling Volatility', color=title_color)
+        ax3.set_facecolor('#2d2d2d')
+        ax3.legend(facecolor='#2d2d2d', edgecolor=grid_color, labelcolor=title_color)
+        ax3.grid(True, alpha=0.2, color=grid_color)
+        ax3.tick_params(colors=title_color)
+        ax3.spines['bottom'].set_color(grid_color)
+        ax3.spines['top'].set_color(grid_color)
+        ax3.spines['left'].set_color(grid_color)
+        ax3.spines['right'].set_color(grid_color)
+        set_date_ticks(ax3, 20, tick_color=title_color)
         
         plt.tight_layout()
-        plt.savefig(save_path)
+        plt.savefig(save_path, facecolor='#1e1e1e')
         plt.close()
         print(f"Alternative time series analysis saved to {save_path}")
+    
+    # Reset to default style
+    plt.style.use('default')
+
+def set_date_ticks(ax, num_ticks=20, tick_color='#e0e0e0'):
+    """Set approximately num_ticks date ticks on the x-axis"""
+    # Get the date range
+    dates = ax.get_xlim()
+    # Convert to matplotlib dates if not already
+    if not isinstance(dates[0], float):
+        dates = mdates.date2num(dates)
+    
+    # Calculate tick positions
+    tick_positions = np.linspace(dates[0], dates[1], num_ticks)
+    
+    # Set the tick positions
+    ax.set_xticks(tick_positions)
+    
+    # Format the tick labels
+    date_format = mdates.DateFormatter('%Y-%m-%d')
+    ax.xaxis.set_major_formatter(date_format)
+    
+    # Rotate the tick labels for better readability and set color
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', color=tick_color)
 
 def plot_historic_price(data, save_path='figures/historic_price.png'):
     """Create a detailed plot of Bitcoin price history with volume"""

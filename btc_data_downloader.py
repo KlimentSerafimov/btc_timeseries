@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import os
 
-def download_btc_data(start_date='2018-01-01', end_date=None, interval='1d'):
+def download_btc_data(start_date, end_date=None, interval='1d'):
     """
     Download Bitcoin price data using Yahoo Finance
     
@@ -65,7 +65,7 @@ def plot_price_history(data, title='Bitcoin Price History', save_path='figures/b
 
 if __name__ == "__main__":
     # Download data
-    btc_data = download_btc_data(start_date='2018-01-01')
+    btc_data = download_btc_data(start_date='2013-01-01')
     
     # Display basic statistics
     print("\nBasic Statistics:")
