@@ -69,7 +69,7 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
     
     # Run the simulation
     print(f"\nStarting simulation for {strategy} strategy...")
-    simulation_days = 365*1  # Simulate one year of trading
+    simulation_days = 365*8  # Simulate one year of trading
     
     # Get start date for directory naming - safely handle potential NaT value
     try:
@@ -111,6 +111,11 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
             
             print(f"Progress: {progress:.1f}% | Date: {exchange.get_current_timestamp().date()} | "
                   f"Balance: ${summary['balance']:.2f} | PnL: {summary['pnl_percentage']:.2f}% | Signal: {signal_text}")
+            
+            # Check if account is bankrupt and stop simulation if needed
+            if summary['balance'] <= 0:
+                print(f"Account bankrupt! Stopping simulation at {progress:.1f}%")
+                break
     
     # Print trade summary
     bot.print_trade_summary()

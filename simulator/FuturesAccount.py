@@ -166,6 +166,23 @@ class FuturesAccount:
 
         # Update available balance
         self.available_balance = self.balance - used_margin
+        
+        # Check if account is bankrupt (balance too low)
+        if self.balance <= 0:
+            # Force close all positions
+            for position in list(self.active_positions):
+                self.liquidate_position(position, current_price, timestamp)
+            
+            # Set balance to minimum of 0 to prevent negative balance
+            self.balance = 0
+            self.available_balance = 0
+            
+            # Record bankruptcy event
+            self.transaction_history.append({
+                'type': 'BANKRUPTCY',
+                'timestamp': timestamp,
+                'message': 'Account liquidated due to insufficient funds'
+            })
 
     def get_account_summary(self) -> Dict[str, Any]:
         """Get a summary of the account status"""

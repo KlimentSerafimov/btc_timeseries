@@ -34,8 +34,4 @@ python simulator/btc_futures_simulator.py
 # Display the generated performance plot
 echo "Simulation complete! Opening performance plot..."
 
-# Open plot on macOS
-open figures/bot_performance.png
-
 echo "=== Simulation complete! ==="
-echo "You can find the performance plot in figures/bot_performance.png" 
