@@ -79,90 +79,99 @@ class TradingBot:
         Moving Average Crossover strategy implementation
         Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
         """
+        # Create a copy to avoid SettingWithCopyWarning
         df = price_data.copy()
         
-        # Convert window sizes to integers
+        # Calculate indicators
         short_window = int(self.params['short_window'])
         long_window = int(self.params['long_window'])
-
         df['MA_short'] = df['Close'].rolling(window=short_window).mean()
         df['MA_long'] = df['Close'].rolling(window=long_window).mean()
 
-        # Calculate crossover signal
-        signal = 0
-        if not df.empty and not df['MA_short'].isna().iloc[-1] and not df['MA_long'].isna().iloc[-1]:
-            if df['MA_short'].iloc[-1] > df['MA_long'].iloc[-1]:
-                signal = 1  # Buy signal
-            elif df['MA_short'].iloc[-1] < df['MA_long'].iloc[-1]:
-                signal = -1  # Sell signal
-                
-        return signal
+        # Calculate signal based on crossover (for indicator calculation)
+        if 'Signal' not in df.columns:
+            df['Signal'] = 0
+        df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1
+        df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1
+
+        # Return signal only if we have valid data
+        if df.empty or df['MA_short'].isna().iloc[-1] or df['MA_long'].isna().iloc[-1]:
+            return 0
+        
+        # Return buy/sell signal based on crossover
+        return 1 if df['MA_short'].iloc[-1] > df['MA_long'].iloc[-1] else -1
 
     def _bollinger_bands_strategy(self, price_data: pd.DataFrame) -> int:
         """
         Bollinger Bands strategy implementation
         Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
         """
+        # Create a copy to avoid SettingWithCopyWarning
         df = price_data.copy()
         
-        # Convert window size to integer
+        # Calculate indicators
         window = int(self.params['window'])
         num_std = self.params['num_std']
-
         df['MA'] = df['Close'].rolling(window=window).mean()
         df['STD'] = df['Close'].rolling(window=window).std()
         df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
         df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
 
-        # Calculate signal
-        signal = 0
-        if not df.empty and not df['Close'].isna().iloc[-1] and not df['Upper_Band'].isna().iloc[-1] and not df['Lower_Band'].isna().iloc[-1]:
-            if df['Close'].iloc[-1] < df['Lower_Band'].iloc[-1]:
-                signal = 1  # Buy signal when price below lower band
-            elif df['Close'].iloc[-1] > df['Upper_Band'].iloc[-1]:
-                signal = -1  # Sell signal when price above upper band
-                
-        return signal
+        # Calculate signals (for indicator calculation)
+        if 'Signal' not in df.columns:
+            df['Signal'] = 0
+        df.loc[df['Close'] < df['Lower_Band'], 'Signal'] = 1
+        df.loc[df['Close'] > df['Upper_Band'], 'Signal'] = -1
+
+        # Return signal only if we have valid data
+        if df.empty or df['Close'].isna().iloc[-1] or df['Upper_Band'].isna().iloc[-1] or df['Lower_Band'].isna().iloc[-1]:
+            return 0
+        
+        # Return buy/sell signal based on price position relative to bands
+        if df['Close'].iloc[-1] < df['Lower_Band'].iloc[-1]:
+            return 1  # Buy signal when price below lower band
+        elif df['Close'].iloc[-1] > df['Upper_Band'].iloc[-1]:
+            return -1  # Sell signal when price above upper band
+        return 0
 
     def _rsi_strategy(self, price_data: pd.DataFrame) -> int:
         """
         RSI strategy implementation
         Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
         """
+        # Create a copy to avoid SettingWithCopyWarning
         df = price_data.copy()
-        
-        # Convert window size to integer
         window = int(self.params['window'])
-
-        # Convert to numpy array for calculations
-        close_values = pd.to_numeric(df['Close']).to_numpy(dtype=float)
-        delta_values = np.diff(close_values, prepend=close_values[0])
-
-        # Calculate gains and losses using numpy
-        gains_array = np.where(delta_values > 0, delta_values, 0)
-        losses_array = np.where(delta_values < 0, -delta_values, 0)
-
-        # Convert back to Series for rolling calculations
-        gains = pd.Series(gains_array, index=df.index)
-        losses = pd.Series(losses_array, index=df.index)
-
-        # Calculate rolling means
-        avg_gain = gains.rolling(window=window).mean()
-        avg_loss = losses.rolling(window=window).mean()
-
-        # Calculate RSI
+        
+        # Calculate RSI more efficiently
+        close_prices = df['Close']
+        delta = close_prices.diff()
+        
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        
+        avg_gain = gain.rolling(window=window).mean()
+        avg_loss = loss.rolling(window=window).mean()
+        
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
-
-        # Calculate signal
-        signal = 0
-        if not df.empty and not df['RSI'].isna().iloc[-1]:
-            if df['RSI'].iloc[-1] < self.params['oversold']:
-                signal = 1  # Buy signal
-            elif df['RSI'].iloc[-1] > self.params['overbought']:
-                signal = -1  # Sell signal
-                
-        return signal
+        
+        # Calculate signals (for indicator calculation)
+        if 'Signal' not in df.columns:
+            df['Signal'] = 0
+        df.loc[df['RSI'] < self.params['oversold'], 'Signal'] = 1
+        df.loc[df['RSI'] > self.params['overbought'], 'Signal'] = -1
+        
+        # Return signal only if we have valid data
+        if df.empty or df['RSI'].isna().iloc[-1]:
+            return 0
+        
+        # Return buy/sell signal based on RSI thresholds
+        if df['RSI'].iloc[-1] < self.params['oversold']:
+            return 1  # Buy signal
+        elif df['RSI'].iloc[-1] > self.params['overbought']:
+            return -1  # Sell signal
+        return 0
 
     def get_trading_signal(self, price_data: pd.DataFrame) -> int:
         """
@@ -182,6 +191,20 @@ class TradingBot:
         # Call the appropriate strategy function
         return self.strategy_functions[self.strategy](price_data)
 
+    def calculate_indicators(self, price_data: pd.DataFrame) -> pd.DataFrame:
+        """Calculate technical indicators based on the strategy"""
+        df = price_data.copy()
+        
+        # Use the strategy functions directly instead of separate calculation methods
+        # Create a new copy to pass to strategy functions to avoid warnings
+        if self.strategy == 'moving_average_crossover':
+            self._moving_average_crossover_strategy(df.copy())
+        elif self.strategy == 'bollinger_bands':
+            self._bollinger_bands_strategy(df.copy())
+        elif self.strategy == 'rsi':
+            self._rsi_strategy(df.copy())
+        
+        return df
 
     def check_take_profit_stop_loss(self) -> bool:
         """Check if take profit or stop loss conditions are met for the active position"""
@@ -282,20 +305,16 @@ class TradingBot:
 
     def run(self, lookback_days: int = 30) -> None:
         """Run the trading bot for one time step"""
-        # Get price history up to current time
+        # Get price history and latest signal
         price_history = self.exchange.get_price_history(lookback_days)
-        
-        # Get the latest signal using the new method
         latest_signal = self.get_trading_signal(price_history)
         
-        # Execute the trade
+        # Execute trade and check for TP/SL
         self.execute_trade(latest_signal)
         
-        # Check for take profit / stop loss if we have an active position
+        # Check and close position if TP/SL is triggered
         if self.active_position and self.check_take_profit_stop_loss():
             self.exchange.close_position(self.account_id, self.active_position)
-            
-            # Record the trade
             self._record_trade(is_close=True)
             
             current_price = self.exchange.get_current_price()
@@ -351,55 +370,36 @@ class TradingBot:
 
         # Convert performance history to DataFrame
         performance_df = pd.DataFrame(self.performance_history)
-
-        # Check if we have any performance data
         if performance_df.empty:
             print("No performance data to plot.")
             return
 
         performance_df.set_index('timestamp', inplace=True)
-
-        # Convert trade signals to DataFrame
-        signals_df = pd.DataFrame(self.trade_signals)
-        if not signals_df.empty:
-            signals_df.set_index('timestamp', inplace=True)
-
-        # Convert trade history to DataFrame for plotting entries and exits
         trades_df = pd.DataFrame(self.trade_history)
 
-        # Set dark style for plots
+        # Set plot style and colors
         plt.style.use('dark_background')
-
-        # Define colors
         colors = {
-            'price': '#00a8ff',      # Blue
-            'balance': '#00ff7f',    # Green
-            'buy': '#00ff7f',        # Green
-            'sell': '#ff3b30',       # Red
-            'title': '#e0e0e0',      # Light gray
-            'grid': '#555555',       # Medium gray
-            'entry': '#ffcc00',      # Yellow
-            'exit': '#ff9500',       # Orange
-            'neutral': '#999999'     # Gray
+            'price': '#00a8ff', 'balance': '#00ff7f', 'buy': '#00ff7f', 
+            'sell': '#ff3b30', 'title': '#e0e0e0', 'grid': '#555555',
+            'entry': '#ffcc00', 'exit': '#ff9500', 'neutral': '#999999'
         }
 
         # Create figure with two subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10),
                                       gridspec_kw={'height_ratios': [2, 1]},
                                       facecolor='#1e1e1e')
-
-        # Set background color
         ax1.set_facecolor('#2d2d2d')
         ax2.set_facecolor('#2d2d2d')
 
-        # Plot price
-        ax1.plot(performance_df.index, performance_df['price'],
+        # Plot price and trades
+        ax1.plot(performance_df.index, performance_df['price'], 
                 label='BTC Price', color=colors['price'], linewidth=2)
-
-        # Plot trade entries and exits if we have trade history
+        
+        # Plot trade markers
         if not trades_df.empty:
             try:
-                # Plot long entries
+                # Plot long entries/exits
                 long_entries = trades_df[trades_df['type'] == 'LONG']
                 if not long_entries.empty:
                     ax1.scatter(long_entries['entry_time'], long_entries['entry_price'],
@@ -407,7 +407,7 @@ class TradingBot:
                     ax1.scatter(long_entries['exit_time'], long_entries['exit_price'],
                               marker='o', s=100, color=colors['exit'], label='Long Exit')
 
-                # Plot short entries
+                # Plot short entries/exits
                 short_entries = trades_df[trades_df['type'] == 'SHORT']
                 if not short_entries.empty:
                     ax1.scatter(short_entries['entry_time'], short_entries['entry_price'],
@@ -423,12 +423,15 @@ class TradingBot:
         ax1.grid(True, alpha=0.2, color=colors['grid'])
         ax1.legend(facecolor='#2d2d2d', edgecolor=colors['grid'], labelcolor=colors['title'])
         ax1.tick_params(colors=colors['title'])
+        
+        for spine in ax1.spines.values():
+            spine.set_color(colors['grid'])
 
         # Plot account balance
         ax2.plot(performance_df.index, performance_df['balance'],
                 label='Account Balance', color=colors['balance'], linewidth=2)
-
-        # Plot position status as background color
+        
+        # Plot position status as background
         if 'position_status' in performance_df.columns:
             try:
                 # Create arrays for each position type
@@ -438,12 +441,10 @@ class TradingBot:
 
                 # Plot colored background for position status
                 dates = performance_df.index
-
-                # Make sure we have valid dates
                 valid_dates = pd.notna(dates)
+                
                 if valid_dates.all() and len(dates) > 1:
                     for i in range(len(dates)-1):
-                        # Skip any NaT values
                         if pd.isna(dates[i]) or pd.isna(dates[i+1]):
                             continue
 
@@ -458,97 +459,32 @@ class TradingBot:
 
         # Style balance subplot
         ax2.set_title('Account Balance and Position Status', fontsize=16, color=colors['title'])
-        ax2.set_xlabel('Date', fontsize=12, color=colors['title'])
         ax2.set_ylabel('Balance (USD)', fontsize=12, color=colors['title'])
+        ax2.set_xlabel('Date', fontsize=12, color=colors['title'])
         ax2.grid(True, alpha=0.2, color=colors['grid'])
         ax2.legend(facecolor='#2d2d2d', edgecolor=colors['grid'], labelcolor=colors['title'])
         ax2.tick_params(colors=colors['title'])
+        
+        for spine in ax2.spines.values():
+            spine.set_color(colors['grid'])
 
-        # Style spines for both subplots
-        for ax in [ax1, ax2]:
-            for spine in ax.spines.values():
-                spine.set_color(colors['grid'])
+        # Format date axis
+        try:
+            valid_dates = pd.notna(performance_df.index)
+            if valid_dates.any():
+                first_date = performance_df.index[valid_dates].min()
+                last_date = performance_df.index[valid_dates].max()
 
-            # Set date ticks safely
-            if not performance_df.empty and len(performance_df.index) > 1:
-                try:
-                    # Make sure we have valid dates for the x-axis limits
-                    valid_dates = pd.notna(performance_df.index)
-                    if valid_dates.any():
-                        first_date = performance_df.index[valid_dates].min()
-                        last_date = performance_df.index[valid_dates].max()
-
-                        if pd.notna(first_date) and pd.notna(last_date):
-                            ax.set_xlim([first_date, last_date])
-
-                            # Format x-axis dates
-                            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                            plt.setp(ax.get_xticklabels(), rotation=45, ha='right', color=colors['title'])
-                except Exception as e:
-                    print(f"Warning: Could not set date limits: {e}")
+                if pd.notna(first_date) and pd.notna(last_date):
+                    for ax in [ax1, ax2]:
+                        ax.set_xlim([first_date, last_date])
+                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', color=colors['title'])
+        except Exception as e:
+            print(f"Warning: Could not set date limits: {e}")
 
         plt.tight_layout()
         plt.savefig(save_path, facecolor='#1e1e1e')
         plt.close()
         plt.style.use('default')  # Reset to default style
-
         print(f"Performance plot saved to {save_path}")
-
-    def calculate_indicators(self, price_data: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators based on the strategy"""
-        df = price_data.copy()
-
-        if self.strategy == 'moving_average_crossover':
-            # Convert window sizes to integers
-            short_window = int(self.params['short_window'])
-            long_window = int(self.params['long_window'])
-
-            df['MA_short'] = df['Close'].rolling(window=short_window).mean()
-            df['MA_long'] = df['Close'].rolling(window=long_window).mean()
-            
-            # Calculate signal based on crossover
-            df['Signal'] = 0
-            df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1
-            df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1
-
-        elif self.strategy == 'bollinger_bands':
-            # Convert window size to integer
-            window = int(self.params['window'])
-            num_std = self.params['num_std']
-
-            df['MA'] = df['Close'].rolling(window=window).mean()
-            df['STD'] = df['Close'].rolling(window=window).std()
-            df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
-            df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
-            
-            # Calculate signals
-            df['Signal'] = 0
-            df.loc[df['Close'] < df['Lower_Band'], 'Signal'] = 1
-            df.loc[df['Close'] > df['Upper_Band'], 'Signal'] = -1
-
-        elif self.strategy == 'rsi':
-            # Convert window size to integer
-            window = int(self.params['window'])
-
-            # Calculate RSI
-            close_values = pd.to_numeric(df['Close']).to_numpy(dtype=float)
-            delta_values = np.diff(close_values, prepend=close_values[0])
-            
-            gains_array = np.where(delta_values > 0, delta_values, 0)
-            losses_array = np.where(delta_values < 0, -delta_values, 0)
-            
-            gains = pd.Series(gains_array, index=df.index)
-            losses = pd.Series(losses_array, index=df.index)
-            
-            avg_gain = gains.rolling(window=window).mean()
-            avg_loss = losses.rolling(window=window).mean()
-            
-            rs = avg_gain / avg_loss
-            df['RSI'] = 100 - (100 / (1 + rs))
-            
-            # Calculate signals
-            df['Signal'] = 0
-            df.loc[df['RSI'] < self.params['oversold'], 'Signal'] = 1
-            df.loc[df['RSI'] > self.params['overbought'], 'Signal'] = -1
-
-        return df
