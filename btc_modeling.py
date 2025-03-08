@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler  # type: ignore
 from sklearn.metrics import mean_squared_error, mean_absolute_error  # type: ignore
 from statsmodels.tsa.arima.model import ARIMA  # type: ignore
-import os, pickle, matplotlib.dates as mdates
+import os
+import pickle
+import matplotlib.dates as mdates
 
 def load_data(filepath='data/btc_price_data.csv'):
     """Load Bitcoin data from CSV file"""

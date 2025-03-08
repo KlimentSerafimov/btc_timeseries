@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns  # type: ignore
 from statsmodels.tsa.seasonal import seasonal_decompose  # type: ignore
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf  # type: ignore
-import os, matplotlib.dates as mdates
+import os
+import matplotlib.dates as mdates 
 
 def load_data(filepath='data/btc_price_data.csv'):
     """Load Bitcoin data from CSV file"""

@@ -1,8 +1,8 @@
 import pandas as pd
 import yfinance as yf  # type: ignore
 import matplotlib.pyplot as plt
-from datetime import datetime
-import os, matplotlib.dates as mdates
+import os
+import matplotlib.dates as mdates
 
 def download_btc_data(start_date, end_date=None, interval='1d'):
     """
