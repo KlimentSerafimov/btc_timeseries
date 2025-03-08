@@ -2,29 +2,30 @@ from .BaseStrategy import BaseStrategy
 from .MovingAverageCrossover import MovingAverageCrossover
 from .BollingerBands import BollingerBands
 from .RSI import RSI
+from .AdaptiveMomentum import AdaptiveMomentum
 
 # Strategy factory
-def create_strategy(strategy_name, params=None):
+def create_strategy(strategy_name: str, params: dict = None) -> BaseStrategy:
     """
     Factory function to create a strategy instance
     
     Parameters:
     - strategy_name: Name of the strategy to create
-    - params: Parameters for the strategy
+    - params: Strategy parameters
     
     Returns:
     - Strategy instance
     """
     if params is None:
         params = {}
-        
-    strategies = {
-        'moving_average_crossover': MovingAverageCrossover,
-        'bollinger_bands': BollingerBands,
-        'rsi': RSI
-    }
     
-    if strategy_name not in strategies:
-        raise ValueError(f"Strategy '{strategy_name}' not implemented")
-    
-    return strategies[strategy_name](params) 
+    if strategy_name == 'moving_average_crossover':
+        return MovingAverageCrossover(params)
+    elif strategy_name == 'bollinger_bands':
+        return BollingerBands(params)
+    elif strategy_name == 'rsi':
+        return RSI(params)
+    elif strategy_name == 'adaptive_momentum':
+        return AdaptiveMomentum(params)
+    else:
+        raise ValueError(f"Unknown strategy: {strategy_name}") 

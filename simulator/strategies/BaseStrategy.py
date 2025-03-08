@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 class BaseStrategy:
     """Base class for all trading strategies"""

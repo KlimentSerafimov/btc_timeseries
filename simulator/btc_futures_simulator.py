@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any
 import os
 import sys
 import pandas as pd
@@ -27,44 +27,14 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
     account_id = f"{strategy}_account"
     exchange.register_account(account_id, initial_balance=10000.0)
     
-    # Default parameters for each strategy
-    default_params = {
-        'moving_average_crossover': {
-            'short_window': 10,
-            'long_window': 30,
-            'position_size': 0.1,
-            'leverage': 5,
-            'take_profit_pct': 0.15,
-            'stop_loss_pct': 0.07
-        },
-        'bollinger_bands': {
-            'window': 20,
-            'num_std': 2,
-            'position_size': 0.1,
-            'leverage': 3,
-            'take_profit_pct': 0.15,
-            'stop_loss_pct': 0.07
-        },
-        'rsi': {
-            'window': 14,
-            'overbought': 70,
-            'oversold': 30,
-            'position_size': 0.1,
-            'leverage': 3,
-            'take_profit_pct': 0.15,
-            'stop_loss_pct': 0.07
-        }
-    }
-    
-    # Use provided params or default ones
-    strategy_params = params if params else default_params[strategy]
-    
     # Create trading bot with strategy parameters
+    # The strategy classes will handle their own default parameters
     bot = TradingBot(
         exchange=exchange,
         account_id=account_id,
         strategy=strategy,
-        params=strategy_params
+        params=params or {},  # Use empty dict if params is None
+        verbose=False  # Set verbose to False by default
     )
     
     # Run the simulation
@@ -85,7 +55,7 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
             else:
                 # If all timestamps are NaT, use a default value
                 start_date = "unknown_start"
-        except:
+        except Exception as e:
             # Fallback if any other error occurs
             start_date = "unknown_start"
     
@@ -165,10 +135,13 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
         f.write(f"Total Trades: {len(account.closed_positions)}\n")
         f.write(f"Win Rate: {win_rate:.2f}%\n\n")
         
-        # Add strategy parameters
+        # Add strategy parameters - handle None case
         f.write("Strategy Parameters:\n")
-        for param, value in strategy_params.items():
-            f.write(f"  {param}: {value}\n")
+        if params:
+            for param, value in params.items():
+                f.write(f"  {param}: {value}\n")
+        else:
+            f.write("  Using default parameters\n")
         
         # Add trade details
         f.write("\nTrade History:\n")
@@ -222,14 +195,15 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
 
 def run_all_strategies() -> Dict[str, Dict[str, Any]]:
     """Run simulations for all available strategies and compare results"""
-    strategies = ['moving_average_crossover', 'bollinger_bands', 'rsi']
+    strategies = ['moving_average_crossover', 'bollinger_bands', 'rsi', 'adaptive_momentum']
     results = {}
     
     # Reset the global base_results_dir before starting a new run
     globals()['base_results_dir'] = None
     
     for strategy in strategies:
-        bot, exchange, base_dir = run_simulation(strategy)
+        # Pass an empty dict instead of None to avoid NoneType errors
+        bot, exchange, base_dir = run_simulation(strategy, params={})
         
         # Store results
         account = exchange.accounts[f"{strategy}_account"]
@@ -327,82 +301,6 @@ def compare_strategies(results: Dict[str, Dict[str, Any]], output_dir: str = Non
         print(f"Comparison results also saved to {output_dir}/")
     print("Individual strategy charts saved to figures/strategies/ directory")
 
-def get_bot_prediction(bot: TradingBot, lookback_days: int = 30) -> Dict[str, Any]:
-    """
-    Get the bot's current prediction and analysis
-    
-    Parameters:
-    - bot: The trading bot instance
-    - lookback_days: Number of days to look back for analysis
-    
-    Returns:
-    - Dictionary with prediction details
-    """
-    # Get price history for analysis (only up to current time)
-    price_history = bot.exchange.get_price_history(lookback_days)
-    
-    # Get the current trading signal
-    signal = bot.get_trading_signal(price_history)
-    
-    # Calculate indicators
-    indicators = bot.calculate_indicators(price_history)
-    
-    # Get current account status
-    account = bot.exchange.accounts[bot.account_id]
-    summary = account.get_account_summary()
-    
-    # Create prediction result
-    result = {
-        'timestamp': bot.exchange.get_current_timestamp(),
-        'current_price': bot.exchange.get_current_price(),
-        'signal': signal,
-        'signal_text': "BUY" if signal == 1 else "SELL" if signal == -1 else "NEUTRAL",
-        'strategy': bot.strategy,
-        'account_balance': summary['balance'],
-        'pnl_percentage': summary['pnl_percentage'],
-        'active_position': bool(bot.active_position),
-        'position_type': 'LONG' if bot.active_position and bot.active_position.is_long else 
-                         'SHORT' if bot.active_position and not bot.active_position.is_long else 'NONE',
-        'indicators': {}
-    }
-    
-    # Add strategy-specific indicators
-    if bot.strategy == 'moving_average_crossover':
-        result['indicators'] = {
-            'short_ma': indicators['MA_short'].iloc[-1] if 'MA_short' in indicators else None,
-            'long_ma': indicators['MA_long'].iloc[-1] if 'MA_long' in indicators else None
-        }
-    elif bot.strategy == 'bollinger_bands':
-        result['indicators'] = {
-            'upper_band': indicators['Upper_Band'].iloc[-1] if 'Upper_Band' in indicators else None,
-            'lower_band': indicators['Lower_Band'].iloc[-1] if 'Lower_Band' in indicators else None,
-            'middle_band': indicators['MA'].iloc[-1] if 'MA' in indicators else None
-        }
-    elif bot.strategy == 'rsi':
-        result['indicators'] = {
-            'rsi': indicators['RSI'].iloc[-1] if 'RSI' in indicators else None,
-            'overbought': bot.params['overbought'],
-            'oversold': bot.params['oversold']
-        }
-    
-    return result
-
 if __name__ == "__main__":
     # Run all strategies and compare results
     results = run_all_strategies()
-    
-    # Alternatively, you can run a single strategy
-    # bot, exchange = run_simulation('moving_average_crossover')
-    
-    # Example of using the get_bot_prediction function
-    # prediction = get_bot_prediction(bot)
-    # print("\nCurrent Bot Prediction:")
-    # print(f"Strategy: {prediction['strategy']}")
-    # print(f"Signal: {prediction['signal_text']}")
-    # print(f"Current Price: ${prediction['current_price']:.2f}")
-    
-    # Print strategy-specific indicators
-    # print("\nIndicators:")
-    # for key, value in prediction['indicators'].items():
-    #     if value is not None:
-    #         print(f"  {key}: {value:.2f}")

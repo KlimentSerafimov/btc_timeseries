@@ -17,7 +17,8 @@ class TradingBot:
                 exchange: FuturesExchange,
                 account_id: str,
                 strategy: str = 'moving_average_crossover',
-                params: Dict[str, Any] = {}):
+                params: Dict[str, Any] = {},
+                verbose: bool = False):
         """
         Initialize the trading bot
 
@@ -26,10 +27,12 @@ class TradingBot:
         - account_id: The account ID to use for trading
         - strategy: Trading strategy to use
         - params: Strategy parameters
+        - verbose: Whether to print trading activity to console
         """
         self.exchange = exchange
         self.account_id = account_id
         self.strategy_name = strategy
+        self.verbose = verbose
 
         # Create strategy instance
         self.strategy = create_strategy(strategy, params)
@@ -70,11 +73,13 @@ class TradingBot:
 
         # Check take profit or stop loss
         if pnl_pct >= self.strategy.params.get('take_profit_pct', float('inf')):
-            print(f"Take profit triggered at {pnl_pct:.2%}")
+            if self.verbose:
+                print(f"Take profit triggered at {pnl_pct:.2%}")
             return True
 
         if pnl_pct <= -self.strategy.params.get('stop_loss_pct', float('inf')):
-            print(f"Stop loss triggered at {pnl_pct:.2%}")
+            if self.verbose:
+                print(f"Stop loss triggered at {pnl_pct:.2%}")
             return True
 
         return False
@@ -115,7 +120,8 @@ class TradingBot:
     def execute_trade(self, signal: int) -> None:
         """Execute a trade based on the signal with improved risk management"""
         if self.account_id not in self.exchange.accounts:
-            print(f"Account {self.account_id} not found")
+            if self.verbose:
+                print(f"Account {self.account_id} not found")
             return
 
         # Get account and check if it has sufficient funds
@@ -137,8 +143,9 @@ class TradingBot:
                 # Record the trade
                 self._record_trade(is_close=True)
 
-                print(f"CLOSED {'LONG' if self.active_position.is_long else 'SHORT'} position at ${current_price:.2f} | "
-                      f"PnL: ${pnl:.2f} | Time: {current_time}")
+                if self.verbose:
+                    print(f"CLOSED {'LONG' if self.active_position.is_long else 'SHORT'} position at ${current_price:.2f} | "
+                          f"PnL: ${pnl:.2f} | Time: {current_time}")
 
                 self.active_position = None
 
@@ -173,7 +180,7 @@ class TradingBot:
                 leverage=leverage
             )
 
-            if self.active_position:
+            if self.active_position and self.verbose:
                 print(f"OPENED {'LONG' if is_long else 'SHORT'} position at ${current_price:.2f} | "
                       f"Size: {size} BTC | Leverage: {leverage}x | Time: {current_time} | Regime: {self.strategy.market_regime}")
 
@@ -194,8 +201,9 @@ class TradingBot:
             current_price = self.exchange.get_current_price()
             current_time = self.exchange.get_current_timestamp()
             
-            print(f"TP/SL CLOSED {'LONG' if self.active_position.is_long else 'SHORT'} position at ${current_price:.2f} | "
-                  f"Time: {current_time}")
+            if self.verbose:
+                print(f"TP/SL CLOSED {'LONG' if self.active_position.is_long else 'SHORT'} position at ${current_price:.2f} | "
+                      f"Time: {current_time}")
             
             self.active_position = None
         
