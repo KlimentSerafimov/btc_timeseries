@@ -275,6 +275,9 @@ def run_all_strategies() -> Dict[str, Dict[str, Any]]:
 
 def compare_strategies(results: Dict[str, Dict[str, Any]], output_dir: str = None) -> None:
     """Compare and visualize the performance of different strategies"""
+    # Get git commit hash
+    _, commit_hash = get_git_status()
+    
     # Print comparison table
     print("\n===== STRATEGY COMPARISON =====")
     print(f"{'STRATEGY':<25} {'FINAL BALANCE':<15} {'PNL %':<10} {'TRADES':<10} {'WIN RATE':<10}")
@@ -329,6 +332,7 @@ def compare_strategies(results: Dict[str, Dict[str, Any]], output_dir: str = Non
         with open(f'{output_dir}/comparison_summary.txt', 'w') as f:
             f.write("STRATEGY COMPARISON\n")
             f.write("=" * 70 + "\n\n")
+            f.write(f"Git Commit: {commit_hash}\n\n")
             f.write(f"{'STRATEGY':<25} {'FINAL BALANCE':<15} {'PNL %':<10} {'TRADES':<10} {'WIN RATE':<10}\n")
             f.write("-" * 70 + "\n")
             
