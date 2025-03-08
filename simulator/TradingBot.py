@@ -9,7 +9,7 @@ import pandas as pd
 
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class TradingBot:
@@ -67,68 +67,121 @@ class TradingBot:
         self.performance_history: List[Dict[str, Any]] = []
         self.trade_history: List[Dict[str, Any]] = []
 
-    def calculate_indicators(self, price_data: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators based on the strategy"""
+        # Add a dictionary to map strategy names to their functions
+        self.strategy_functions = {
+            'moving_average_crossover': self._moving_average_crossover_strategy,
+            'bollinger_bands': self._bollinger_bands_strategy,
+            'rsi': self._rsi_strategy
+        }
+
+    def _moving_average_crossover_strategy(self, price_data: pd.DataFrame) -> int:
+        """
+        Moving Average Crossover strategy implementation
+        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
+        """
         df = price_data.copy()
+        
+        # Convert window sizes to integers
+        short_window = int(self.params['short_window'])
+        long_window = int(self.params['long_window'])
 
-        if self.strategy == 'moving_average_crossover':
-            # Convert window sizes to integers
-            short_window = int(self.params['short_window'])
-            long_window = int(self.params['long_window'])
+        df['MA_short'] = df['Close'].rolling(window=short_window).mean()
+        df['MA_long'] = df['Close'].rolling(window=long_window).mean()
 
-            df['MA_short'] = df['Close'].rolling(window=short_window).mean()
-            df['MA_long'] = df['Close'].rolling(window=long_window).mean()
+        # Calculate crossover signal
+        signal = 0
+        if not df.empty and not df['MA_short'].isna().iloc[-1] and not df['MA_long'].isna().iloc[-1]:
+            if df['MA_short'].iloc[-1] > df['MA_long'].iloc[-1]:
+                signal = 1  # Buy signal
+            elif df['MA_short'].iloc[-1] < df['MA_long'].iloc[-1]:
+                signal = -1  # Sell signal
+                
+        return signal
 
-            # Calculate crossover signal
-            df['Signal'] = 0
-            df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1  # Buy signal
-            df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1  # Sell signal
+    def _bollinger_bands_strategy(self, price_data: pd.DataFrame) -> int:
+        """
+        Bollinger Bands strategy implementation
+        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
+        """
+        df = price_data.copy()
+        
+        # Convert window size to integer
+        window = int(self.params['window'])
+        num_std = self.params['num_std']
 
-        elif self.strategy == 'bollinger_bands':
-            # Convert window size to integer
-            window = int(self.params['window'])
-            num_std = self.params['num_std']
+        df['MA'] = df['Close'].rolling(window=window).mean()
+        df['STD'] = df['Close'].rolling(window=window).std()
+        df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
+        df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
 
-            df['MA'] = df['Close'].rolling(window=window).mean()
-            df['STD'] = df['Close'].rolling(window=window).std()
-            df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
-            df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
+        # Calculate signal
+        signal = 0
+        if not df.empty and not df['Close'].isna().iloc[-1] and not df['Upper_Band'].isna().iloc[-1] and not df['Lower_Band'].isna().iloc[-1]:
+            if df['Close'].iloc[-1] < df['Lower_Band'].iloc[-1]:
+                signal = 1  # Buy signal when price below lower band
+            elif df['Close'].iloc[-1] > df['Upper_Band'].iloc[-1]:
+                signal = -1  # Sell signal when price above upper band
+                
+        return signal
 
-            # Calculate signals
-            df['Signal'] = 0
-            df.loc[df['Close'] < df['Lower_Band'], 'Signal'] = 1  # Buy signal when price below lower band
-            df.loc[df['Close'] > df['Upper_Band'], 'Signal'] = -1  # Sell signal when price above upper band
+    def _rsi_strategy(self, price_data: pd.DataFrame) -> int:
+        """
+        RSI strategy implementation
+        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
+        """
+        df = price_data.copy()
+        
+        # Convert window size to integer
+        window = int(self.params['window'])
 
-        elif self.strategy == 'rsi':
-            # Convert window size to integer
-            window = int(self.params['window'])
+        # Convert to numpy array for calculations
+        close_values = pd.to_numeric(df['Close']).to_numpy(dtype=float)
+        delta_values = np.diff(close_values, prepend=close_values[0])
 
-            # Convert to numpy array for calculations
-            close_values = pd.to_numeric(df['Close']).to_numpy(dtype=float)
-            delta_values = np.diff(close_values, prepend=close_values[0])
+        # Calculate gains and losses using numpy
+        gains_array = np.where(delta_values > 0, delta_values, 0)
+        losses_array = np.where(delta_values < 0, -delta_values, 0)
 
-            # Calculate gains and losses using numpy
-            gains_array = np.where(delta_values > 0, delta_values, 0)
-            losses_array = np.where(delta_values < 0, -delta_values, 0)
+        # Convert back to Series for rolling calculations
+        gains = pd.Series(gains_array, index=df.index)
+        losses = pd.Series(losses_array, index=df.index)
 
-            # Convert back to Series for rolling calculations
-            gains = pd.Series(gains_array, index=df.index)
-            losses = pd.Series(losses_array, index=df.index)
+        # Calculate rolling means
+        avg_gain = gains.rolling(window=window).mean()
+        avg_loss = losses.rolling(window=window).mean()
 
-            # Calculate rolling means
-            avg_gain = gains.rolling(window=window).mean()
-            avg_loss = losses.rolling(window=window).mean()
+        # Calculate RSI
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
-            # Calculate RSI
-            rs = avg_gain / avg_loss
-            df['RSI'] = 100 - (100 / (1 + rs))
+        # Calculate signal
+        signal = 0
+        if not df.empty and not df['RSI'].isna().iloc[-1]:
+            if df['RSI'].iloc[-1] < self.params['oversold']:
+                signal = 1  # Buy signal
+            elif df['RSI'].iloc[-1] > self.params['overbought']:
+                signal = -1  # Sell signal
+                
+        return signal
 
-            # Calculate signals
-            df['Signal'] = 0
-            df.loc[df['RSI'] < self.params['oversold'], 'Signal'] = 1
-            df.loc[df['RSI'] > self.params['overbought'], 'Signal'] = -1
+    def get_trading_signal(self, price_data: pd.DataFrame) -> int:
+        """
+        Get the current trading signal based on the selected strategy
+        
+        Parameters:
+        - price_data: DataFrame with price data up to current time
+        
+        Returns:
+        - signal: 1 for buy, -1 for sell, 0 for neutral
+        """
+        # Check if we have a strategy function for the selected strategy
+        if self.strategy not in self.strategy_functions:
+            print(f"Strategy '{self.strategy}' not implemented")
+            return 0
+        
+        # Call the appropriate strategy function
+        return self.strategy_functions[self.strategy](price_data)
 
-        return df
 
     def check_take_profit_stop_loss(self) -> bool:
         """Check if take profit or stop loss conditions are met for the active position"""
@@ -153,7 +206,7 @@ class TradingBot:
 
         return False
 
-    def _record_trade(self, is_close: bool, exit_reason: str = None) -> None:
+    def _record_trade(self, is_close: bool) -> None:
         """Record a trade in the trade history"""
         if not self.active_position:
             return
@@ -183,9 +236,6 @@ class TradingBot:
                 'pnl': pnl,
                 'pnl_percent': pnl_percent
             }
-
-            if exit_reason:
-                trade_record['exit_reason'] = exit_reason
 
             self.trade_history.append(trade_record)
 
@@ -232,45 +282,34 @@ class TradingBot:
 
     def run(self, lookback_days: int = 30) -> None:
         """Run the trading bot for one time step"""
-        # Get price history
+        # Get price history up to current time
         price_history = self.exchange.get_price_history(lookback_days)
-
-        # Calculate indicators
-        indicators = self.calculate_indicators(price_history)
-
-        # Get the latest signal
-        if not indicators.empty and not indicators['Signal'].isna().all():
-            latest_signal = indicators['Signal'].iloc[-1]
-
-            # Record the signal
-            self.trade_signals.append({
-                'timestamp': self.exchange.get_current_timestamp(),
-                'price': self.exchange.get_current_price(),
-                'signal': latest_signal
-            })
-
-            # Execute the trade
-            self.execute_trade(latest_signal)
-
+        
+        # Get the latest signal using the new method
+        latest_signal = self.get_trading_signal(price_history)
+        
+        # Execute the trade
+        self.execute_trade(latest_signal)
+        
         # Check for take profit / stop loss if we have an active position
         if self.active_position and self.check_take_profit_stop_loss():
             self.exchange.close_position(self.account_id, self.active_position)
-
-            # Record the trade with exit reason
-            self._record_trade(is_close=True, exit_reason='Take Profit/Stop Loss')
-
+            
+            # Record the trade
+            self._record_trade(is_close=True)
+            
             current_price = self.exchange.get_current_price()
             current_time = self.exchange.get_current_timestamp()
-
+            
             print(f"TP/SL CLOSED {'LONG' if self.active_position.is_long else 'SHORT'} position at ${current_price:.2f} | "
                   f"Time: {current_time}")
-
+            
             self.active_position = None
-
+        
         # Record performance
         account = self.exchange.accounts[self.account_id]
         summary = account.get_account_summary()
-
+        
         self.performance_history.append({
             'timestamp': self.exchange.get_current_timestamp(),
             'price': self.exchange.get_current_price(),
@@ -454,3 +493,62 @@ class TradingBot:
         plt.style.use('default')  # Reset to default style
 
         print(f"Performance plot saved to {save_path}")
+
+    def calculate_indicators(self, price_data: pd.DataFrame) -> pd.DataFrame:
+        """Calculate technical indicators based on the strategy"""
+        df = price_data.copy()
+
+        if self.strategy == 'moving_average_crossover':
+            # Convert window sizes to integers
+            short_window = int(self.params['short_window'])
+            long_window = int(self.params['long_window'])
+
+            df['MA_short'] = df['Close'].rolling(window=short_window).mean()
+            df['MA_long'] = df['Close'].rolling(window=long_window).mean()
+            
+            # Calculate signal based on crossover
+            df['Signal'] = 0
+            df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1
+            df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1
+
+        elif self.strategy == 'bollinger_bands':
+            # Convert window size to integer
+            window = int(self.params['window'])
+            num_std = self.params['num_std']
+
+            df['MA'] = df['Close'].rolling(window=window).mean()
+            df['STD'] = df['Close'].rolling(window=window).std()
+            df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
+            df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
+            
+            # Calculate signals
+            df['Signal'] = 0
+            df.loc[df['Close'] < df['Lower_Band'], 'Signal'] = 1
+            df.loc[df['Close'] > df['Upper_Band'], 'Signal'] = -1
+
+        elif self.strategy == 'rsi':
+            # Convert window size to integer
+            window = int(self.params['window'])
+
+            # Calculate RSI
+            close_values = pd.to_numeric(df['Close']).to_numpy(dtype=float)
+            delta_values = np.diff(close_values, prepend=close_values[0])
+            
+            gains_array = np.where(delta_values > 0, delta_values, 0)
+            losses_array = np.where(delta_values < 0, -delta_values, 0)
+            
+            gains = pd.Series(gains_array, index=df.index)
+            losses = pd.Series(losses_array, index=df.index)
+            
+            avg_gain = gains.rolling(window=window).mean()
+            avg_loss = losses.rolling(window=window).mean()
+            
+            rs = avg_gain / avg_loss
+            df['RSI'] = 100 - (100 / (1 + rs))
+            
+            # Calculate signals
+            df['Signal'] = 0
+            df.loc[df['RSI'] < self.params['oversold'], 'Signal'] = 1
+            df.loc[df['RSI'] > self.params['overbought'], 'Signal'] = -1
+
+        return df

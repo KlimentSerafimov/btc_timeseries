@@ -155,5 +155,7 @@ class FuturesExchange:
 
     def get_price_history(self, lookback_days: int = 30) -> pd.DataFrame:
         """Get price history for the last N days from current time"""
+        # Only return data up to the current index (inclusive)
         start_idx = max(0, self.current_index - lookback_days)
-        return self.price_data.iloc[start_idx:self.current_index + 1]
+        end_idx = self.current_index + 1  # +1 because of Python's slicing behavior
+        return self.price_data.iloc[start_idx:end_idx]

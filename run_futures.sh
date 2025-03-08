@@ -29,28 +29,13 @@ fi
 # Run the Bitcoin futures simulator
 echo "Running Bitcoin futures trading simulation..."
 cd "$(dirname "$0")"  # Change to the script's directory to ensure relative imports work
-python btc_futures_simulator.py
+python simulator/btc_futures_simulator.py
 
 # Display the generated performance plot
 echo "Simulation complete! Opening performance plot..."
 
-# Detect OS and open the plot accordingly
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    open figures/bot_performance.png
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    if command -v xdg-open &> /dev/null; then
-        xdg-open figures/bot_performance.png
-    else
-        echo "Cannot open the plot automatically. Please check figures/bot_performance.png"
-    fi
-elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    # Windows
-    start figures/bot_performance.png
-else
-    echo "Cannot open the plot automatically. Please check figures/bot_performance.png"
-fi
+# Open plot on macOS
+open figures/bot_performance.png
 
 echo "=== Simulation complete! ==="
 echo "You can find the performance plot in figures/bot_performance.png" 
