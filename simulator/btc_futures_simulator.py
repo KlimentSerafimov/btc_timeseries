@@ -3,6 +3,7 @@ import os
 import sys
 import pandas as pd
 import matplotlib.pyplot as plt
+import subprocess
 
 # Add parent directory to path to allow imports from sibling modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,8 +11,49 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulator.FuturesExchange import FuturesExchange
 from simulator.TradingBot import TradingBot
 
+def get_git_status() -> Tuple[bool, str]:
+    """
+    Check if there are uncommitted changes and get the current commit hash
+    
+    Returns:
+    - Tuple of (has_uncommitted_changes, commit_hash)
+    """
+    try:
+        # Check for uncommitted changes
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        has_uncommitted_changes = bool(result.stdout.strip())
+        
+        # Get current commit hash
+        if not has_uncommitted_changes:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            commit_hash = result.stdout.strip()
+        else:
+            commit_hash = "uncommitted"
+            
+        return has_uncommitted_changes, commit_hash
+    except (subprocess.SubprocessError, FileNotFoundError):
+        # Git command failed or git is not installed
+        return False, "git_unavailable"
+
 def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str, Any] = None) -> Tuple[TradingBot, FuturesExchange]:
     """Run a complete simulation with the exchange and trading bot"""
+    # Check git status before running
+    has_uncommitted_changes, commit_hash = get_git_status()
+    if has_uncommitted_changes:
+        print("ERROR: There are uncommitted changes in the repository.")
+        print("Please commit your changes before running simulations to ensure reproducibility.")
+        sys.exit(1)
+    
     # Load Bitcoin price data
     try:
         from btc_analysis import load_data
@@ -128,6 +170,7 @@ def run_simulation(strategy: str = 'moving_average_crossover', params: Dict[str,
     with open(f"{results_dir}/summary.txt", "w") as f:
         f.write(f"{strategy.upper()} Strategy Simulation Summary\n")
         f.write(f"{'='*50}\n")
+        f.write(f"Git Commit: {commit_hash}\n")
         f.write(f"Simulation Period: {start_date} to {exchange.get_current_timestamp().strftime('%Y-%m-%d')} ({total_steps} days)\n\n")
         f.write(f"Initial Balance: ${account.initial_balance:.2f}\n")
         f.write(f"Final Balance: ${summary['balance']:.2f}\n")
