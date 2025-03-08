@@ -3,6 +3,7 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 from datetime import datetime
 import os
+import matplotlib.dates as mdates
 
 def download_btc_data(start_date, end_date=None, interval='1d'):
     """
@@ -53,14 +54,54 @@ def plot_price_history(data, title='Bitcoin Price History', save_path='figures/b
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
-    plt.figure(figsize=(12, 6))
-    plt.plot(data.index, data['Close'])
-    plt.title(title)
-    plt.xlabel('Date')
-    plt.ylabel('Price (USD)')
-    plt.grid(True)
-    plt.savefig(save_path)
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
+    # Define colors for better visibility on dark background
+    line_color = '#00a8ff'  # Bright blue
+    title_color = '#e0e0e0'  # Light gray
+    grid_color = '#555555'   # Medium gray
+    
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='#1e1e1e')
+    ax.set_facecolor('#2d2d2d')
+    
+    # Plot the data
+    ax.plot(data.index, data['Close'], color=line_color, linewidth=2)
+    
+    # Set title and labels
+    ax.set_title(title, color=title_color, fontsize=16)
+    ax.set_xlabel('Date', color=title_color, fontsize=12)
+    ax.set_ylabel('Price (USD)', color=title_color, fontsize=12)
+    
+    # Configure grid and spines
+    ax.grid(True, alpha=0.2, color=grid_color)
+    ax.tick_params(colors=title_color)
+    for spine in ax.spines.values():
+        spine.set_color(grid_color)
+    
+    # Set date ticks - using a different approach for approximately 20 ticks
+    date_range = [data.index[0], data.index[-1]]
+    ax.set_xlim(date_range)
+    
+    # Calculate tick positions for approximately 20 ticks
+    date_interval = (date_range[1] - date_range[0]) / 20
+    locator = mdates.DayLocator(interval=max(1, int(date_interval.days)))
+    ax.xaxis.set_major_locator(locator)
+    
+    # Format the tick labels
+    date_format = mdates.DateFormatter('%Y-%m-%d')
+    ax.xaxis.set_major_formatter(date_format)
+    
+    # Rotate tick labels
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', color=title_color)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, facecolor='#1e1e1e')
     plt.close()
+    
+    # Reset to default style
+    plt.style.use('default')
+    
     print(f"Price history plot saved to {save_path}")
 
 if __name__ == "__main__":

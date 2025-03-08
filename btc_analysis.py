@@ -51,17 +51,40 @@ def plot_returns_distribution(returns, save_path='figures/returns_distribution.p
     """Plot the distribution of returns"""
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
-    plt.figure(figsize=(12, 6))
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
+    # Define colors for better visibility on dark background
+    hist_color = '#00a8ff'  # Bright blue
+    kde_color = '#00ff7f'   # Green
+    title_color = '#e0e0e0' # Light gray
+    grid_color = '#555555'  # Medium gray
+    
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='#1e1e1e')
+    ax.set_facecolor('#2d2d2d')
     
     # Plot histogram with kernel density estimate
-    sns.histplot(returns.dropna(), kde=True, bins=50)
+    sns.histplot(returns.dropna(), kde=True, bins=50, ax=ax, color=hist_color, 
+                 line_kws={'color': kde_color, 'linewidth': 2})
     
-    plt.title('Distribution of Bitcoin Daily Returns')
-    plt.xlabel('Daily Returns')
-    plt.ylabel('Frequency')
-    plt.grid(True, alpha=0.3)
-    plt.savefig(save_path)
+    # Set title and labels
+    ax.set_title('Distribution of Bitcoin Daily Returns', color=title_color, fontsize=16)
+    ax.set_xlabel('Daily Returns', color=title_color, fontsize=12)
+    ax.set_ylabel('Frequency', color=title_color, fontsize=12)
+    
+    # Configure grid and spines
+    ax.grid(True, alpha=0.2, color=grid_color)
+    ax.tick_params(colors=title_color)
+    for spine in ax.spines.values():
+        spine.set_color(grid_color)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, facecolor='#1e1e1e')
     plt.close()
+    
+    # Reset to default style
+    plt.style.use('default')
+    
     print(f"Returns distribution plot saved to {save_path}")
 
 def plot_volatility(data, window=20, save_path='figures/volatility.png'):
@@ -71,14 +94,41 @@ def plot_volatility(data, window=20, save_path='figures/volatility.png'):
     # Calculate rolling standard deviation
     data['Volatility'] = data['Daily_Return'].rolling(window=window).std() * np.sqrt(window)
     
-    plt.figure(figsize=(12, 6))
-    plt.plot(data['Volatility'])
-    plt.title(f'Bitcoin {window}-Day Rolling Volatility')
-    plt.xlabel('Date')
-    plt.ylabel('Volatility')
-    plt.grid(True)
-    plt.savefig(save_path)
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
+    # Define colors for better visibility on dark background
+    line_color = '#00a8ff'  # Bright blue
+    title_color = '#e0e0e0' # Light gray
+    grid_color = '#555555'  # Medium gray
+    
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='#1e1e1e')
+    ax.set_facecolor('#2d2d2d')
+    
+    # Plot the data
+    ax.plot(data['Volatility'], color=line_color, linewidth=2)
+    
+    # Set title and labels
+    ax.set_title(f'Bitcoin {window}-Day Rolling Volatility', color=title_color, fontsize=16)
+    ax.set_xlabel('Date', color=title_color, fontsize=12)
+    ax.set_ylabel('Volatility', color=title_color, fontsize=12)
+    
+    # Configure grid and spines
+    ax.grid(True, alpha=0.2, color=grid_color)
+    ax.tick_params(colors=title_color)
+    for spine in ax.spines.values():
+        spine.set_color(grid_color)
+    
+    # Set date ticks
+    set_date_ticks(ax, 20, tick_color=title_color)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, facecolor='#1e1e1e')
     plt.close()
+    
+    # Reset to default style
+    plt.style.use('default')
+    
     print(f"Volatility plot saved to {save_path}")
 
 def decompose_time_series(data, save_path='figures/decomposition.png'):
@@ -291,39 +341,67 @@ def plot_historic_price(data, save_path='figures/historic_price.png'):
     """Create a detailed plot of Bitcoin price history with volume"""
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
+    # Define colors for better visibility on dark background
+    line_color = '#00a8ff'      # Bright blue
+    ma50_color = '#ff9500'      # Orange
+    ma200_color = '#ff3b30'     # Red
+    volume_color = '#8e8e93'    # Gray
+    title_color = '#e0e0e0'     # Light gray
+    grid_color = '#555555'      # Medium gray
+    annotation_color = '#34c759'# Green
+    
     # Create figure with two subplots (price and volume)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), 
+                                   gridspec_kw={'height_ratios': [3, 1]},
+                                   facecolor='#1e1e1e')
+    ax1.set_facecolor('#2d2d2d')
+    ax2.set_facecolor('#2d2d2d')
     
     # Plot price on the first subplot
-    ax1.plot(data.index, data['Close'], label='Close Price', color='blue', linewidth=2)
+    ax1.plot(data.index, data['Close'], label='Close Price', color=line_color, linewidth=2)
     
     # Add moving averages
     data['MA50'] = data['Close'].rolling(window=50).mean()
     data['MA200'] = data['Close'].rolling(window=200).mean()
     
-    ax1.plot(data.index, data['MA50'], label='50-Day MA', color='orange', linewidth=1.5)
-    ax1.plot(data.index, data['MA200'], label='200-Day MA', color='red', linewidth=1.5)
+    ax1.plot(data.index, data['MA50'], label='50-Day MA', color=ma50_color, linewidth=1.5)
+    ax1.plot(data.index, data['MA200'], label='200-Day MA', color=ma200_color, linewidth=1.5)
     
     # Set labels and title for price subplot
-    ax1.set_title('Bitcoin Price History with Moving Averages', fontsize=16)
-    ax1.set_ylabel('Price (USD)', fontsize=12)
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
+    ax1.set_title('Bitcoin Price History with Moving Averages', fontsize=16, color=title_color)
+    ax1.set_ylabel('Price (USD)', fontsize=12, color=title_color)
+    ax1.grid(True, alpha=0.2, color=grid_color)
+    
+    # Configure legend and ticks
+    legend = ax1.legend(facecolor='#2d2d2d', edgecolor=grid_color, labelcolor=title_color)
+    ax1.tick_params(colors=title_color)
+    for spine in ax1.spines.values():
+        spine.set_color(grid_color)
     
     # Format y-axis with commas for thousands
     ax1.get_yaxis().set_major_formatter(plt.matplotlib.ticker.StrMethodFormatter('{x:,.0f}'))
     
     # Plot volume on the second subplot
     volume_data = data['Volume']
-    ax2.bar(data.index, volume_data, color='gray', alpha=0.7, width=2)
+    ax2.bar(data.index, volume_data, color=volume_color, alpha=0.7, width=2)
     
     # Set labels for volume subplot
-    ax2.set_xlabel('Date', fontsize=12)
-    ax2.set_ylabel('Volume', fontsize=12)
-    ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel('Date', fontsize=12, color=title_color)
+    ax2.set_ylabel('Volume', fontsize=12, color=title_color)
+    ax2.grid(True, alpha=0.2, color=grid_color)
+    ax2.tick_params(colors=title_color)
+    for spine in ax2.spines.values():
+        spine.set_color(grid_color)
     
     # Format y-axis with commas for thousands and scientific notation for large numbers
     ax2.get_yaxis().set_major_formatter(plt.matplotlib.ticker.StrMethodFormatter('{x:.1e}'))
+    
+    # Set date ticks for both subplots
+    set_date_ticks(ax1, 20, tick_color=title_color)
+    set_date_ticks(ax2, 20, tick_color=title_color)
     
     # Add annotations for key events
     key_events = [
@@ -333,24 +411,33 @@ def plot_historic_price(data, save_path='figures/historic_price.png'):
         ('2022-11-11', 'FTX Collapse', 17000)
     ]
     
+    # Fix: Ensure the data index is sorted before finding closest dates
+    sorted_data = data.sort_index()
+    
     for date, label, price in key_events:
         try:
             event_date = pd.to_datetime(date)
-            if event_date in data.index or (data.index[0] <= event_date <= data.index[-1]):
+            if event_date >= sorted_data.index[0] and event_date <= sorted_data.index[-1]:
                 # Find the closest date in the index
-                closest_date = data.index[data.index.get_indexer([event_date], method='nearest')[0]]
+                closest_idx = sorted_data.index.get_indexer([event_date], method='nearest')[0]
+                closest_date = sorted_data.index[closest_idx]
                 ax1.annotate(label, 
                             xy=(closest_date, price),
                             xytext=(10, 0),
                             textcoords="offset points",
-                            arrowprops=dict(arrowstyle="->", color='green'),
-                            fontsize=10)
+                            arrowprops=dict(arrowstyle="->", color=annotation_color),
+                            fontsize=10,
+                            color=title_color)
         except Exception as e:
             print(f"Could not add annotation for {date}: {e}")
     
     plt.tight_layout()
-    plt.savefig(save_path)
+    plt.savefig(save_path, facecolor='#1e1e1e')
     plt.close()
+    
+    # Reset to default style
+    plt.style.use('default')
+    
     print(f"Historic price plot saved to {save_path}")
 
 if __name__ == "__main__":

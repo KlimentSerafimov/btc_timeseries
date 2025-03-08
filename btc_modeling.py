@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from statsmodels.tsa.arima.model import ARIMA
 import os
 import pickle
+import matplotlib.dates as mdates
 
 def load_data(filepath='data/btc_price_data.csv'):
     """Load Bitcoin data from CSV file"""
@@ -78,22 +79,53 @@ def evaluate_model(model, test_data, scaler, original_data, save_path='figures/m
     print(f"MAE: {mae:.2f}")
     print(f"RMSE: {rmse:.2f}")
     
+    # Set dark style for plots
+    plt.style.use('dark_background')
+    
+    # Define colors for better visibility on dark background
+    line_color1 = '#00a8ff'  # Bright blue
+    line_color2 = '#00ff7f'  # Green
+    title_color = '#e0e0e0'  # Light gray
+    grid_color = '#555555'   # Medium gray
+    
     # Plot predictions vs actual
-    plt.figure(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='#1e1e1e')
+    ax.set_facecolor('#2d2d2d')
     
     # Get the dates for the test period
     test_dates = original_data.index[-len(test_data):]
     
-    plt.plot(test_dates, test_actual, label='Actual Prices')
-    plt.plot(test_dates, predictions_actual, label='Predicted Prices', alpha=0.7)
+    ax.plot(test_dates, test_actual, label='Actual Prices', color=line_color1, linewidth=2)
+    ax.plot(test_dates, predictions_actual, label='Predicted Prices', color=line_color2, alpha=0.7, linewidth=2)
     
-    plt.title('Bitcoin Price Prediction: Actual vs Predicted')
-    plt.xlabel('Date')
-    plt.ylabel('Price (USD)')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(save_path)
+    # Set title and labels
+    ax.set_title('Bitcoin Price Prediction: Actual vs Predicted', color=title_color, fontsize=16)
+    ax.set_xlabel('Date', color=title_color, fontsize=12)
+    ax.set_ylabel('Price (USD)', color=title_color, fontsize=12)
+    
+    # Configure legend, grid and spines
+    legend = ax.legend(facecolor='#2d2d2d', edgecolor=grid_color, labelcolor=title_color)
+    ax.grid(True, alpha=0.2, color=grid_color)
+    ax.tick_params(colors=title_color)
+    for spine in ax.spines.values():
+        spine.set_color(grid_color)
+    
+    # Set date ticks
+    date_range = [test_dates[0], test_dates[-1]]
+    ax.set_xlim(date_range)
+    date_interval = (date_range[1] - date_range[0]) / 20
+    locator = mdates.DayLocator(interval=max(1, int(date_interval.days)))
+    ax.xaxis.set_major_locator(locator)
+    
+    # Rotate tick labels
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', color=title_color)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, facecolor='#1e1e1e')
     plt.close()
+    
+    # Reset to default style
+    plt.style.use('default')
     
     print(f"Evaluation plot saved to {save_path}")
     
