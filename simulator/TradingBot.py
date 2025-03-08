@@ -1,11 +1,10 @@
 from FuturesExchange import FuturesExchange
 from FuturesPosition import FuturesPosition
-
+from strategies import create_strategy
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
-
 
 import os
 from typing import Any, Dict, List, Optional
@@ -30,257 +29,16 @@ class TradingBot:
         """
         self.exchange = exchange
         self.account_id = account_id
-        self.strategy = strategy
+        self.strategy_name = strategy
 
-        # Default parameters - IMPROVED based on backtest results
-        self.default_params = {
-            'moving_average_crossover': {
-                'short_window': 10,  # Keep as is - performed well
-                'long_window': 30,   # Keep as is - performed well
-                'position_size': 0.1,  # BTC
-                'leverage': 3,       # Reduced from 5 for better risk management
-                'take_profit_pct': 0.2,  # Increased from 0.1 to capture more profit
-                'stop_loss_pct': 0.07    # Increased slightly for more breathing room
-            },
-            'bollinger_bands': {
-                'window': 20,
-                'num_std': 2.5,      # Increased from 2 to reduce false signals
-                'position_size': 0.1,
-                'leverage': 2,       # Reduced from 3 for better risk management
-                'take_profit_pct': 0.15,
-                'stop_loss_pct': 0.07
-            },
-            'rsi': {
-                'window': 14,
-                'overbought': 75,    # Increased from 70 to reduce false signals
-                'oversold': 25,      # Decreased from 30 to reduce false signals
-                'position_size': 0.05, # Reduced from 0.1 for better risk management
-                'leverage': 2,       # Reduced from 3 for better risk management
-                'take_profit_pct': 0.15,
-                'stop_loss_pct': 0.07
-            }
-        }
-
-        # Set parameters
-        self.params = {**self.default_params[strategy], **(params or {})}
+        # Create strategy instance
+        self.strategy = create_strategy(strategy, params)
 
         # Trading state
         self.active_position: Optional[FuturesPosition] = None
         self.trade_signals: List[Dict[str, Any]] = []
         self.performance_history: List[Dict[str, Any]] = []
         self.trade_history: List[Dict[str, Any]] = []
-
-        # Add a dictionary to map strategy names to their functions
-        self.strategy_functions = {
-            'moving_average_crossover': self._moving_average_crossover_strategy,
-            'bollinger_bands': self._bollinger_bands_strategy,
-            'rsi': self._rsi_strategy
-        }
-        
-        # Add market regime tracking
-        self.market_regime = 'unknown'
-        self.volatility_history = []
-
-    def _moving_average_crossover_strategy(self, price_data: pd.DataFrame) -> int:
-        """
-        Moving Average Crossover strategy implementation
-        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
-        """
-        # Create a copy to avoid SettingWithCopyWarning
-        df = price_data.copy()
-        
-        # Calculate indicators
-        short_window = int(self.params['short_window'])
-        long_window = int(self.params['long_window'])
-        df['MA_short'] = df['Close'].rolling(window=short_window).mean()
-        df['MA_long'] = df['Close'].rolling(window=long_window).mean()
-        
-        # Calculate volatility for dynamic position sizing
-        df['returns'] = df['Close'].pct_change()
-        df['volatility'] = df['returns'].rolling(window=20).std()
-        
-        # Store latest volatility for position sizing
-        if not df['volatility'].isna().iloc[-1]:
-            self.volatility_history.append(df['volatility'].iloc[-1])
-            if len(self.volatility_history) > 20:
-                self.volatility_history.pop(0)
-
-        # Calculate signal based on crossover (for indicator calculation)
-        if 'Signal' not in df.columns:
-            df['Signal'] = 0
-        df.loc[df['MA_short'] > df['MA_long'], 'Signal'] = 1
-        df.loc[df['MA_short'] < df['MA_long'], 'Signal'] = -1
-
-        # Return signal only if we have valid data
-        if df.empty or df['MA_short'].isna().iloc[-1] or df['MA_long'].isna().iloc[-1]:
-            return 0
-        
-        # Detect market regime
-        self._update_market_regime(df)
-        
-        # Return buy/sell signal based on crossover
-        return 1 if df['MA_short'].iloc[-1] > df['MA_long'].iloc[-1] else -1
-
-    def _bollinger_bands_strategy(self, price_data: pd.DataFrame) -> int:
-        """
-        Bollinger Bands strategy implementation
-        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
-        """
-        # Create a copy to avoid SettingWithCopyWarning
-        df = price_data.copy()
-        
-        # Calculate indicators
-        window = int(self.params['window'])
-        num_std = self.params['num_std']
-        df['MA'] = df['Close'].rolling(window=window).mean()
-        df['STD'] = df['Close'].rolling(window=window).std()
-        df['Upper_Band'] = df['MA'] + (df['STD'] * num_std)
-        df['Lower_Band'] = df['MA'] - (df['STD'] * num_std)
-        
-        # Calculate volatility for dynamic position sizing
-        df['returns'] = df['Close'].pct_change()
-        df['volatility'] = df['returns'].rolling(window=20).std()
-        
-        # Store latest volatility for position sizing
-        if not df['volatility'].isna().iloc[-1]:
-            self.volatility_history.append(df['volatility'].iloc[-1])
-            if len(self.volatility_history) > 20:
-                self.volatility_history.pop(0)
-
-        # Calculate signals (for indicator calculation)
-        if 'Signal' not in df.columns:
-            df['Signal'] = 0
-        df.loc[df['Close'] < df['Lower_Band'], 'Signal'] = 1
-        df.loc[df['Close'] > df['Upper_Band'], 'Signal'] = -1
-
-        # Return signal only if we have valid data
-        if df.empty or df['Close'].isna().iloc[-1] or df['Upper_Band'].isna().iloc[-1] or df['Lower_Band'].isna().iloc[-1]:
-            return 0
-        
-        # Detect market regime
-        self._update_market_regime(df)
-        
-        # Add trend filter to reduce false signals
-        trend_direction = 0
-        if len(df) > 10:
-            short_ma = df['Close'].rolling(window=10).mean()
-            long_ma = df['Close'].rolling(window=30).mean()
-            if not short_ma.isna().iloc[-1] and not long_ma.isna().iloc[-1]:
-                trend_direction = 1 if short_ma.iloc[-1] > long_ma.iloc[-1] else -1
-        
-        # Return buy/sell signal based on price position relative to bands
-        # Only take signals that align with the trend
-        if df['Close'].iloc[-1] < df['Lower_Band'].iloc[-1] and (trend_direction >= 0 or self.market_regime == 'bear'):
-            return 1  # Buy signal when price below lower band
-        elif df['Close'].iloc[-1] > df['Upper_Band'].iloc[-1] and (trend_direction <= 0 or self.market_regime == 'bull'):
-            return -1  # Sell signal when price above upper band
-        return 0
-
-    def _rsi_strategy(self, price_data: pd.DataFrame) -> int:
-        """
-        RSI strategy implementation with improved filters
-        Returns: 1 for buy signal, -1 for sell signal, 0 for neutral
-        """
-        # Create a copy to avoid SettingWithCopyWarning
-        df = price_data.copy()
-        window = int(self.params['window'])
-        
-        # Calculate RSI more efficiently
-        close_prices = df['Close']
-        delta = close_prices.diff()
-        
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        
-        avg_gain = gain.rolling(window=window).mean()
-        avg_loss = loss.rolling(window=window).mean()
-        
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-        
-        # Calculate volatility for dynamic position sizing
-        df['returns'] = df['Close'].pct_change()
-        df['volatility'] = df['returns'].rolling(window=20).std()
-        
-        # Store latest volatility for position sizing
-        if not df['volatility'].isna().iloc[-1]:
-            self.volatility_history.append(df['volatility'].iloc[-1])
-            if len(self.volatility_history) > 20:
-                self.volatility_history.pop(0)
-        
-        # Calculate signals (for indicator calculation)
-        if 'Signal' not in df.columns:
-            df['Signal'] = 0
-        df.loc[df['RSI'] < self.params['oversold'], 'Signal'] = 1
-        df.loc[df['RSI'] > self.params['overbought'], 'Signal'] = -1
-        
-        # Return signal only if we have valid data
-        if df.empty or df['RSI'].isna().iloc[-1]:
-            return 0
-        
-        # Detect market regime
-        self._update_market_regime(df)
-        
-        # Add trend filter to reduce false signals
-        trend_direction = 0
-        if len(df) > 10:
-            short_ma = df['Close'].rolling(window=10).mean()
-            long_ma = df['Close'].rolling(window=30).mean()
-            if not short_ma.isna().iloc[-1] and not long_ma.isna().iloc[-1]:
-                trend_direction = 1 if short_ma.iloc[-1] > long_ma.iloc[-1] else -1
-        
-        # Return buy/sell signal based on RSI thresholds with trend filter
-        if df['RSI'].iloc[-1] < self.params['oversold']:
-            # Only take buy signals in bull market or when trend is up
-            if self.market_regime == 'bull' or trend_direction > 0:
-                return 1  # Buy signal
-        elif df['RSI'].iloc[-1] > self.params['overbought']:
-            # Only take sell signals in bear market or when trend is down
-            if self.market_regime == 'bear' or trend_direction < 0:
-                return -1  # Sell signal
-        return 0
-    
-    def _update_market_regime(self, price_data: pd.DataFrame) -> None:
-        """
-        Detect market regime (bull/bear) based on price action
-        """
-        if len(price_data) < 50:
-            return
-            
-        # Calculate 50-day moving average
-        ma_50 = price_data['Close'].rolling(window=50).mean()
-        
-        # Calculate 200-day moving average
-        ma_200 = price_data['Close'].rolling(window=200).mean()
-        
-        if not ma_50.isna().iloc[-1] and not ma_200.isna().iloc[-1]:
-            # Bull market if 50-day MA > 200-day MA
-            if ma_50.iloc[-1] > ma_200.iloc[-1]:
-                self.market_regime = 'bull'
-            else:
-                self.market_regime = 'bear'
-
-    def _get_dynamic_position_size(self) -> float:
-        """
-        Calculate position size dynamically based on volatility
-        """
-        base_size = self.params['position_size']
-        
-        # If we don't have enough volatility data, use base size
-        if len(self.volatility_history) < 5:
-            return base_size
-            
-        # Calculate average volatility
-        avg_volatility = sum(self.volatility_history) / len(self.volatility_history)
-        
-        # If volatility is high, reduce position size
-        if avg_volatility > 0.05:  # 5% daily volatility is high
-            return base_size * 0.5
-        # If volatility is very low, increase position size slightly
-        elif avg_volatility < 0.02:  # 2% daily volatility is low
-            return base_size * 1.2
-            
-        return base_size
 
     def get_trading_signal(self, price_data: pd.DataFrame) -> int:
         """
@@ -292,28 +50,11 @@ class TradingBot:
         Returns:
         - signal: 1 for buy, -1 for sell, 0 for neutral
         """
-        # Check if we have a strategy function for the selected strategy
-        if self.strategy not in self.strategy_functions:
-            print(f"Strategy '{self.strategy}' not implemented")
-            return 0
-        
-        # Call the appropriate strategy function
-        return self.strategy_functions[self.strategy](price_data)
+        return self.strategy.calculate_signal(price_data)
 
     def calculate_indicators(self, price_data: pd.DataFrame) -> pd.DataFrame:
         """Calculate technical indicators based on the strategy"""
-        df = price_data.copy()
-        
-        # Use the strategy functions directly instead of separate calculation methods
-        # Create a new copy to pass to strategy functions to avoid warnings
-        if self.strategy == 'moving_average_crossover':
-            self._moving_average_crossover_strategy(df.copy())
-        elif self.strategy == 'bollinger_bands':
-            self._bollinger_bands_strategy(df.copy())
-        elif self.strategy == 'rsi':
-            self._rsi_strategy(df.copy())
-        
-        return df
+        return self.strategy.calculate_indicators(price_data)
 
     def check_take_profit_stop_loss(self) -> bool:
         """Check if take profit or stop loss conditions are met for the active position"""
@@ -328,11 +69,11 @@ class TradingBot:
                   ((entry_price - current_price) / entry_price)
 
         # Check take profit or stop loss
-        if pnl_pct >= self.params.get('take_profit_pct', float('inf')):
+        if pnl_pct >= self.strategy.params.get('take_profit_pct', float('inf')):
             print(f"Take profit triggered at {pnl_pct:.2%}")
             return True
 
-        if pnl_pct <= -self.params.get('stop_loss_pct', float('inf')):
+        if pnl_pct <= -self.strategy.params.get('stop_loss_pct', float('inf')):
             print(f"Stop loss triggered at {pnl_pct:.2%}")
             return True
 
@@ -406,14 +147,15 @@ class TradingBot:
             is_long = signal == 1
             
             # Use dynamic position sizing based on volatility and market regime
-            size = self._get_dynamic_position_size()
+            base_size = self.strategy.params['position_size']
+            size = self.strategy.get_dynamic_position_size(base_size)
             
             # Adjust position size based on market regime
-            if (is_long and self.market_regime == 'bear') or (not is_long and self.market_regime == 'bull'):
+            if (is_long and self.strategy.market_regime == 'bear') or (not is_long and self.strategy.market_regime == 'bull'):
                 # Reduce position size when trading against the market regime
                 size *= 0.7
             
-            leverage = self.params['leverage']
+            leverage = self.strategy.params['leverage']
 
             # Check if account has sufficient margin for this trade
             required_margin = size * current_price / leverage
@@ -433,9 +175,9 @@ class TradingBot:
 
             if self.active_position:
                 print(f"OPENED {'LONG' if is_long else 'SHORT'} position at ${current_price:.2f} | "
-                      f"Size: {size} BTC | Leverage: {leverage}x | Time: {current_time} | Regime: {self.market_regime}")
+                      f"Size: {size} BTC | Leverage: {leverage}x | Time: {current_time} | Regime: {self.strategy.market_regime}")
 
-    def run(self, lookback_days: int = 30) -> None:
+    def run(self, lookback_days: int = 200) -> None:
         """Run the trading bot for one time step"""
         # Get price history and latest signal
         price_history = self.exchange.get_price_history(lookback_days)
